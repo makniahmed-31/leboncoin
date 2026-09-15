@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "printWidth": 100,
+  "trailingComma": "es5",
+  "sortPackageJson": false,
+  "sortTailwindcss": {},
+  "ignorePatterns": [
+    ".next",
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "package-lock.json",
+    "src/server/db.json",
+    "src/server/db.json.original",
+    "docs"
+  ]
+}
