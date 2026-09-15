@@ -12,8 +12,7 @@
     "playwright-report",
     "test-results",
     "package-lock.json",
-    "src/server/db.json",
-    "src/server/db.json.original",
+    "src/server",
     "docs"
   ]
 }
