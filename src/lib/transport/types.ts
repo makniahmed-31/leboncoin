@@ -1,4 +1,10 @@
-export type ConnectionStatus = 'connecting' | 'live' | 'offline'
+/**
+ * `idle` is not a failure: it is the stream deliberately not opened, which is the state on every
+ * page reached without a session. It is distinct from `offline` so the banner can stay quiet —
+ * telling a visitor on the login screen that the connection was lost would be a lie about a
+ * connection that was never attempted.
+ */
+export type ConnectionStatus = 'idle' | 'connecting' | 'live' | 'offline'
 
 export type TransportEvent =
   | { type: 'status'; status: ConnectionStatus }

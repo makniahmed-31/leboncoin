@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 
+import { getSession } from '@/lib/session'
 import { THEME_COLORS, THEME_INIT_SCRIPT } from '@/shared/theme/theme'
 import { ConnectionBanner } from '@/shared/ui/connection-banner'
 
@@ -26,7 +27,14 @@ export const viewport: Viewport = {
   ],
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /*
+   * Read here only to decide whether to open the event stream. `getSession` is wrapped in React's
+   * request cache, so the conversations layout below shares this verification rather than paying
+   * for a second one.
+   */
+  const session = await getSession()
+
   return (
     /* The boot script below writes shadcn's `dark` class onto this element before React
        hydrates, which is a mismatch by construction — suppressHydrationWarning says so
@@ -37,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             paint rather than after it, which is what a flash of the wrong theme actually is. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
 
-        <Providers>
+        <Providers live={session !== null}>
           <a
             href="#contenu"
             className="focus:bg-primary focus:text-primary-foreground sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:px-4 focus:py-2"

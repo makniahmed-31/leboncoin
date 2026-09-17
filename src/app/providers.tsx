@@ -15,12 +15,15 @@ import { LiveProvider } from '@/shared/live/live-provider'
  * The query client is created in state rather than at module scope so that concurrent requests on
  * the server cannot share one cache between users.
  */
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, live }: { children: React.ReactNode; live: boolean }) {
   const [queryClient] = useState(createQueryClient)
 
   return (
     <QueryClientProvider client={queryClient}>
-      <LiveProvider>{children}</LiveProvider>
+      {/* `live` comes from the server, which is the only side that can read the session cookie.
+          Deciding it here rather than inside the provider keeps the rule — no stream without a
+          session — in one obvious place. */}
+      <LiveProvider enabled={live}>{children}</LiveProvider>
     </QueryClientProvider>
   )
 }

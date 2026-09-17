@@ -21,15 +21,34 @@ const LiveContext = createContext<LiveContextValue | null>(null)
  * Business state stays out of it — it exposes a status and a subscription, and the features
  * decide what an event means for their own caches.
  */
-export function LiveProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<ConnectionStatus>('connecting')
+export function LiveProvider({
+  children,
+  enabled = true,
+}: {
+  children: React.ReactNode
+  enabled?: boolean
+}) {
+  const [status, setStatus] = useState<ConnectionStatus>(enabled ? 'connecting' : 'idle')
   const transportRef = useRef<MessageTransport | null>(null)
 
   if (transportRef.current === null) {
     transportRef.current = createTransport()
   }
 
+  /*
+   * Nothing is opened without a session, and that is a correctness rule rather than an
+   * optimisation.
+   *
+   * `/api/events` answers 401 with no session, which EventSource treats as fatal — so the
+   * transport reports it as offline and reopens with backoff, exactly as it should for a 503.
+   * It cannot tell the two apart, because an EventSource error carries no status. On a page
+   * where authentication is the thing the visitor has not done yet, that retry can never
+   * succeed, so it would be an unbounded series of 401s behind the login form. The provider
+   * still wraps the whole tree, so `useLive` works everywhere; it simply does not connect.
+   */
   useEffect(() => {
+    if (!enabled) return
+
     const transport = transportRef.current
     if (!transport) return
 
@@ -42,7 +61,7 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
       unsubscribe()
       transport.disconnect()
     }
-  }, [])
+  }, [enabled])
 
   const value = useMemo<LiveContextValue>(
     () => ({
