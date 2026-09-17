@@ -4,8 +4,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { usePresence } from '@/features/presence/hooks/use-presence'
+import { useTypingConversations } from '@/features/typing/hooks/use-typing-indicator'
 import { usePrefetchThread } from '@/features/messages/hooks/use-prefetch-thread'
 import { queryKeys } from '@/lib/query-keys'
+import { useSoundStore } from '@/stores/sound-store'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useLiveEvent } from '@/shared/live/live-provider'
 import { Button } from '@/shared/ui/button'
@@ -14,6 +17,8 @@ import { PlusIcon, SearchIcon } from '@/shared/ui/icons'
 import { CONVERSATION_SKELETON_COUNT, ConversationRowSkeleton } from '@/shared/ui/skeletons'
 import { Spinner } from '@/shared/ui/spinner'
 import { ThemeToggle } from '@/shared/ui/theme-toggle'
+import { useNotificationSound } from '@/features/notifications/hooks/use-notification-sound'
+import { SoundToggle } from '@/shared/ui/sound-toggle'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 
 import { useConversations } from '../hooks/use-conversations'
@@ -60,7 +65,8 @@ export function ConversationList({
   const prefetchThread = usePrefetchThread()
 
   // The other side of every loaded conversation, so the picker can mark the people the member is
-  // already talking to rather than silently redirecting them into an existing thread.
+  // already talking to rather than silently redirecting them into an existing thread — and, now,
+  // so presence can be asked for exactly the people on screen.
   const counterpartIds = useMemo(
     () =>
       conversations.map((conversation) =>
@@ -68,6 +74,33 @@ export function ConversationList({
       ),
     [conversations, currentUserId]
   )
+
+  const presence = usePresence(counterpartIds)
+
+  /*
+   * Watched for every conversation, not just the open one. This list is where a member sees that
+   * somebody is writing to them without having opened the thread, which is the case the thread's
+   * own indicator cannot cover.
+   */
+  const typingIn = useTypingConversations()
+
+  /*
+   * Mounted here rather than in the thread, and that placement is the feature.
+   *
+   * This header is the one component present on every route under /conversations, including the
+   * one with no thread open. A sound hook inside the open thread could only ever announce
+   * messages the member is already looking at, which is the single case where a sound is least
+   * useful.
+   */
+  useNotificationSound(currentUserId)
+
+  /*
+   * The preference is read here and handed down, because `SoundToggle` lives in `shared/ui` and
+   * that layer may not reach into `stores/`. The container/presentational split is the layering
+   * rule made visible rather than a pattern applied for its own sake.
+   */
+  const soundEnabled = useSoundStore((state) => state.enabled)
+  const toggleSound = useSoundStore((state) => state.toggle)
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -106,6 +139,7 @@ export function ConversationList({
           {/* The list header is the one piece of chrome on screen at every breakpoint and on
               every route under /conversations, which makes it the only place these controls can
               live without being duplicated into the thread header. */}
+          <SoundToggle enabled={soundEnabled} onToggle={toggleSound} />
           <ThemeToggle />
           <SessionMenu nickname={nickname} userId={currentUserId} />
 
@@ -214,6 +248,14 @@ export function ConversationList({
                   conversation={conversation}
                   currentUserId={currentUserId}
                   active={conversation.id === activeId}
+                  online={
+                    presence.get(
+                      conversation.senderId === currentUserId
+                        ? conversation.recipientId
+                        : conversation.senderId
+                    )?.online ?? false
+                  }
+                  typing={typingIn.has(conversation.id)}
                   onPrefetch={prefetchThread}
                 />
               ))}

@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { memo } from 'react'
 
+import { AvatarWithPresence } from '@/shared/ui/presence-dot'
+import { TypingDots } from '@/shared/ui/typing-indicator'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/shared/ui/user-avatar'
 import { formatAbsolute, formatListStamp } from '@/shared/utils/date'
@@ -14,13 +16,22 @@ type Props = {
   conversation: Conversation
   currentUserId: number
   active: boolean
+  online: boolean
+  typing: boolean
   onPrefetch: (conversationId: number) => void
 }
 
 /** Above this the badge reads "99+"; the API stops counting there too. */
 const UNREAD_CAP = 99
 
-function ConversationItemComponent({ conversation, currentUserId, active, onPrefetch }: Props) {
+function ConversationItemComponent({
+  conversation,
+  currentUserId,
+  active,
+  online,
+  typing,
+  onPrefetch,
+}: Props) {
   const counterpart = counterpartOf(conversation, currentUserId)
   const unread = conversation.unreadCount > 0
 
@@ -40,7 +51,15 @@ function ConversationItemComponent({ conversation, currentUserId, active, onPref
           active ? 'bg-primary/10 hover:bg-primary/10' : 'bg-card shadow-sm'
         )}
       >
-        <UserAvatar nickname={counterpart.nickname} userId={counterpart.id} />
+        {/*
+          `ring-card` on every row, including the active one. The active row is a 10% primary tint
+          over the same surface, so a card-coloured ring is within a few percent of it — and the
+          alternative does not work: `ring-primary/10` would composite on top of the row's own
+          tint and come out darker than the thing it is meant to disappear into.
+        */}
+        <AvatarWithPresence online={online}>
+          <UserAvatar nickname={counterpart.nickname} userId={counterpart.id} />
+        </AvatarWithPresence>
 
         <span className="min-w-0 flex-1">
           {/* Name and stamp share a baseline row. The name is the flexible one and the stamp
@@ -49,6 +68,10 @@ function ConversationItemComponent({ conversation, currentUserId, active, onPref
           <span className="flex items-baseline justify-between gap-2">
             <span className={cn('truncate', unread ? 'font-bold' : 'font-semibold')}>
               {counterpart.nickname}
+              {/* The dot is decorative and colour is never the only carrier, so the state is
+                  spelled out for anyone who cannot see it. Inside the name so it is announced as
+                  part of the row rather than as a stray word after it. */}
+              {online ? <span className="sr-only"> (en ligne)</span> : null}
             </span>
             <time
               dateTime={new Date(conversation.lastMessageTimestamp * 1000).toISOString()}
@@ -63,7 +86,24 @@ function ConversationItemComponent({ conversation, currentUserId, active, onPref
           </span>
 
           <span className="mt-0.5 flex items-center gap-2">
-            {conversation.preview ? (
+            {/*
+              Typing replaces the preview rather than sitting beside it.
+              
+              This row has one line for "what is happening in this thread", and while somebody is
+              writing, that is what is happening — the previous message is the less current of the
+              two. Showing both would need a second line on every row in the list to accommodate a
+              state that is visible for a few seconds at a time.
+
+              This is the indicator that matters most: the member who needs to know that somebody
+              is writing to them is the one looking at their inbox, not the one already watching
+              the thread.
+            */}
+            {typing ? (
+              <span className="text-primary flex min-w-0 flex-1 items-center gap-1.5 text-[13px] font-medium">
+                <TypingDots />
+                ecrit...
+              </span>
+            ) : conversation.preview ? (
               <span
                 className={cn(
                   'min-w-0 flex-1 truncate text-[13px]',

@@ -1,7 +1,7 @@
 type IconProps = { className?: string }
 
 /**
- * Inline rather than from an icon package: eight glyphs do not justify a dependency, and these
+ * Inline rather than from an icon package: ten glyphs do not justify a dependency, and these
  * ship as markup instead of a runtime. All are decorative — every one sits next to a text label
  * or inside a control with an accessible name of its own.
  */
@@ -97,6 +97,42 @@ export function SearchIcon({ className }: IconProps) {
     <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
       <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.7" />
       <path d="m16 16 4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function SoundOnIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M5 9.5h3l4-3.5v12l-4-3.5H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {/* Two arcs rather than one: a single arc reads as a parenthesis at 16px. */}
+      <path
+        d="M15.5 9.2a4 4 0 0 1 0 5.6M18 6.8a7.5 7.5 0 0 1 0 10.4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function SoundOffIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M5 9.5h3l4-3.5v12l-4-3.5H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {/* A cross rather than a slash through the whole glyph: the speaker stays readable, and the
+          two marks sit where the arcs were, so the pair reads as the same icon switched off. */}
+      <path d="m16 9.5 5 5m0-5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }
