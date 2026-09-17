@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { useComposerStore } from '@/stores/composer-store'
+import { useOutboxStore } from '@/stores/outbox-store'
 import { UserAvatar } from '@/shared/ui/user-avatar'
 
 /**
@@ -43,6 +44,14 @@ export function SessionMenu({ nickname, userId }: { nickname: string; userId: nu
        * on every keystroke in the composer.
        */
       useComposerStore.getState().clearAll()
+
+      /*
+       * And the outbox. It is not persisted, so it does not survive a reload — but it is a module
+       * singleton and this is a client navigation, so an unsent message stays in memory across
+       * the sign-out. The next member to open a thread the two of them share would find the
+       * previous one's undelivered text sitting in it with a retry button.
+       */
+      useOutboxStore.getState().clear()
 
       router.refresh()
       router.replace('/login')
