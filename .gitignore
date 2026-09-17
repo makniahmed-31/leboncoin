@@ -5,8 +5,11 @@ build
 coverage
 playwright-report
 test-results
+# Written by the e2e global setup: a real signed-in session.
+.e2e
+.env
 .env*.local
+!.env.example
 .DS_Store
 next-env.d.ts
 *.tsbuildinfo
-.e2e
