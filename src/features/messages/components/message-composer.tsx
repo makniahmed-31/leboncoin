@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 
+import { useTypingSignal } from '@/features/typing/hooks/use-typing-signal'
 import { useComposerStore } from '@/stores/composer-store'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
@@ -35,6 +36,7 @@ export function MessageComposer({ conversationId, counterpartName, onSend }: Pro
   const setDraft = useComposerStore((state) => state.setDraft)
   const clearDraft = useComposerStore((state) => state.clearDraft)
   const [error, setError] = useState<string | null>(null)
+  const { ping, stop } = useTypingSignal(conversationId)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const errorId = useId()
   const hintId = useId()
@@ -64,6 +66,9 @@ export function MessageComposer({ conversationId, counterpartName, onSend }: Pro
     }
 
     setError(null)
+    // Before clearing the draft, so the other side's dots go out as the message lands rather than
+    // lingering for the few seconds the receiver's timeout would otherwise take.
+    stop()
     clearDraft(conversationId)
     // Focus stays in the composer: the user is very likely to send another one, and taking focus
     // back to the top of the page after each message makes a keyboard conversation unusable.
@@ -92,6 +97,15 @@ export function MessageComposer({ conversationId, counterpartName, onSend }: Pro
           onChange={(event) => {
             setDraft(conversationId, event.target.value)
             if (error) setError(null)
+
+            /*
+             * Pinged on change rather than on keydown, so it covers a paste and an IME
+             * composition as well as typing — all three are the member composing a message.
+             * Emptying the field is treated as having stopped, which is what a member who
+             * selects all and deletes has actually done.
+             */
+            if (event.target.value.length > 0) ping()
+            else stop()
           }}
           onKeyDown={(event) => {
             // Enter sends, Shift+Enter breaks the line. The IME check stops a Japanese or Korean
@@ -101,6 +115,10 @@ export function MessageComposer({ conversationId, counterpartName, onSend }: Pro
               submit()
             }
           }}
+          // Leaving the field is the clearest "no longer typing" there is, and it costs one call.
+          // Everything less explicit — closing the tab, losing signal — is left to the receiver's
+          // own timeout, which has to exist for those cases regardless.
+          onBlur={stop}
           // shadcn's Textarea draws its own bordered box; here the border belongs to the pill
           // this sits inside, so the box is unset rather than reproduced.
           className="max-h-30 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-1.5 text-[15px] shadow-none focus-visible:border-0 focus-visible:ring-0 md:text-[15px] dark:bg-transparent"

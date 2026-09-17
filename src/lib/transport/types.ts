@@ -10,6 +10,18 @@ export type TransportEvent =
   | { type: 'status'; status: ConnectionStatus }
   | { type: 'messages:changed'; conversationId: number }
   | { type: 'conversations:changed' }
+  /*
+   * Distinct from `messages:changed`, and the distinction is the point.
+   *
+   * `messages:changed` says a cache is stale and is emitted for the open thread only. This says a
+   * specific message arrived, for any thread, and carries who wrote it — which is what a
+   * notification sound needs and what a cache invalidation deliberately does not. Folding the two
+   * together would mean either playing a sound on every refetch trigger, or teaching the cache
+   * layer about audio.
+   */
+  | { type: 'message:received'; conversationId: number; messageId: number; authorId: number }
+  | { type: 'typing:changed'; conversationId: number; userId: number; typing: boolean }
+  | { type: 'presence:changed'; userId: number; online: boolean; lastSeenAt?: number }
 
 /**
  * The seam between "new messages arrived" and how the app found out.
@@ -22,6 +34,12 @@ export type TransportEvent =
  *
  * Writing the pushed one second is what proved the shape: an interface designed around polling
  * would have leaked an interval or a refetch callback into it, and neither appears here.
+ *
+ * Not every implementation can produce every event, and the interface does not pretend otherwise.
+ * Typing and presence exist only on a pushed connection — there is nothing to poll for a fact
+ * that is never written down — so the polling transport simply never emits them and the features
+ * that consume them degrade to absence rather than to error. An interface that demanded them
+ * would have forced the fallback to fake them.
  */
 export interface MessageTransport {
   connect(): void

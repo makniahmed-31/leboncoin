@@ -13,6 +13,14 @@ type Options = {
  * not, and polling a 60-item list as often as a single thread would triple the request count for
  * no perceptible gain. Both pause when the tab is hidden, which matters more than it sounds —
  * a background tab left open all afternoon otherwise keeps asking.
+ *
+ * Three things this cannot do, and does not pretend to. Typing and presence are never emitted:
+ * neither is written down anywhere, so there is no endpoint to poll — a member on this transport
+ * sees no dots and no green indicator, which is honest rather than degraded. Nor is
+ * `message:received`, because an interval learns that a thread changed and never that a
+ * particular message arrived, so the notification sound stays silent here too. The features
+ * consuming all three treat absence as "nothing to show", so choosing this transport costs those
+ * decorations and leaves messaging itself intact.
  */
 export function createPollingTransport(options: Options = {}): MessageTransport {
   const messageIntervalMs = options.messageIntervalMs ?? 5_000

@@ -55,6 +55,40 @@ export function createSseTransport(url = '/api/events'): MessageTransport {
         emitter.emit({ type: 'messages:changed', conversationId: watched })
       }
       emitter.emit({ type: 'conversations:changed' })
+      // Emitted for every thread, not just the watched one: a sound for a message in a
+      // conversation the member is not looking at is the case that matters most.
+      emitter.emit({
+        type: 'message:received',
+        conversationId: notification.conversationId,
+        messageId: notification.messageId,
+        authorId: notification.authorId,
+      })
+      return
+    }
+
+    /*
+     * Typing and presence are relayed as-is and touch no cache. They are the two events with
+     * nothing behind them to refetch, so the translation here is a rename rather than an
+     * invalidation — and they must not fall through to `conversations:changed` below, which
+     * would turn every keystroke on the other end into a refetch of the whole list.
+     */
+    if (notification.type === 'typing.changed') {
+      emitter.emit({
+        type: 'typing:changed',
+        conversationId: notification.conversationId,
+        userId: notification.userId,
+        typing: notification.typing,
+      })
+      return
+    }
+
+    if (notification.type === 'presence.changed') {
+      emitter.emit({
+        type: 'presence:changed',
+        userId: notification.userId,
+        online: notification.online,
+        lastSeenAt: notification.lastSeenAt,
+      })
       return
     }
 
@@ -110,7 +144,18 @@ export function createSseTransport(url = '/api/events'): MessageTransport {
 
     source.addEventListener('error', onError)
 
-    for (const type of ['message.created', 'conversation.created', 'conversation.read']) {
+    /*
+     * Registered per event name because the server sets one, and `onmessage` only ever fires for
+     * frames without a `type` field. A name added on the server and forgotten here is silently
+     * never delivered — which is why this list sits directly under the union it mirrors.
+     */
+    for (const type of [
+      'message.created',
+      'conversation.created',
+      'conversation.read',
+      'typing.changed',
+      'presence.changed',
+    ]) {
       source.addEventListener(type, onServerEvent as EventListener)
     }
   }

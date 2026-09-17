@@ -190,3 +190,27 @@
     }
   }
 }
+
+/*
+ * The typing indicator's wave.
+ *
+ * One keyframe, applied to all three dots with staggered delays, rather than three keyframes that
+ * would have to be kept in step with each other by hand. Plain CSS rather than a `--animate-*`
+ * theme token because it has exactly one consumer and belongs next to nothing else.
+ *
+ * The travel is deliberately small: a dot that bounces far enough to be noticed from across the
+ * room competes with the messages for attention, and this sits directly under them. The
+ * reduced-motion rule above already flattens it for anyone who has asked for that.
+ */
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
