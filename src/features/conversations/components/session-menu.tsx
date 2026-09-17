@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
+import { useComposerStore } from '@/stores/composer-store'
 import { UserAvatar } from '@/shared/ui/user-avatar'
 
 /**
@@ -33,6 +34,16 @@ export function SessionMenu({ nickname, userId }: { nickname: string; userId: nu
        * refetch lands. `clear` is blunt and that is the right instinct here.
        */
       queryClient.clear()
+
+      /*
+       * Drafts go with it. They are persisted to localStorage, so unlike the cache they would
+       * otherwise outlive the browser session entirely — and two members who share a device also
+       * share any conversation they are both in, which is exactly where the draft would resurface.
+       * Read through getState rather than subscribing: this component has no reason to re-render
+       * on every keystroke in the composer.
+       */
+      useComposerStore.getState().clearAll()
+
       router.refresh()
       router.replace('/login')
     }
