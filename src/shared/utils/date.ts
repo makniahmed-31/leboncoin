@@ -54,3 +54,24 @@ export function formatListStamp(unixSeconds: number, now = Date.now()) {
 
   return relativeFormatter.format(-elapsed, 'second')
 }
+
+/**
+ * How long ago a member was last connected, phrased for a presence line.
+ *
+ * Reuses the relative formatter rather than `formatListStamp`, because the two answer different
+ * questions: a message from three weeks ago is best given as a date, while "Actif le 12 mars"
+ * is a sentence nobody needs — past a few days, the useful answer is simply that they have not
+ * been around.
+ */
+export function formatLastSeen(unixSeconds: number, now = Date.now()) {
+  const elapsed = Math.round(now / 1000) - unixSeconds
+
+  if (elapsed < 60) return "a l'instant"
+  if (elapsed >= 60 * 60 * 24 * 7) return 'il y a longtemps'
+
+  for (const [unit, seconds] of RELATIVE_UNITS) {
+    if (elapsed >= seconds) return relativeFormatter.format(-Math.floor(elapsed / seconds), unit)
+  }
+
+  return "a l'instant"
+}

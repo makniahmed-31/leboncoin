@@ -29,6 +29,12 @@ export const queryKeys = {
     root: ['messages'] as const,
     list: (conversationId: number) => [...queryKeys.messages.root, 'list', conversationId] as const,
   },
+  /**
+   * Keyed on the ids being asked about, sorted, so two screens asking about the same people share
+   * one cache entry and one request. Unsorted would make `[2,1]` and `[1,2]` different queries
+   * for the same answer.
+   */
+  presence: (userIds: number[]) => ['presence', userIds.toSorted((a, b) => a - b)] as const,
   contacts: () => ['contacts'] as const,
   products: () => ['products'] as const,
 } as const

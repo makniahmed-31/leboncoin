@@ -3,9 +3,12 @@
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 
+import { AvatarWithPresence } from '@/shared/ui/presence-dot'
+import { usePresenceOf } from '@/features/presence/hooks/use-presence'
+import { useTypingIndicator } from '@/features/typing/hooks/use-typing-indicator'
 import { UserAvatar } from '@/shared/ui/user-avatar'
 import { BackIcon } from '@/shared/ui/icons'
-import { formatAbsolute, formatListStamp } from '@/shared/utils/date'
+import { formatAbsolute, formatLastSeen, formatListStamp } from '@/shared/utils/date'
 
 import { useConversation } from '../hooks/use-conversation'
 import { counterpartOf, type Conversation } from '../schemas'
@@ -23,6 +26,8 @@ export function ConversationHeader({
   const { data = conversation } = useConversation(conversation.id)
   const counterpart = counterpartOf(data, currentUserId)
   const headerRef = useRef<HTMLElement>(null)
+  const presence = usePresenceOf(counterpart.id)
+  const typing = useTypingIndicator(conversation.id)
 
   /**
    * Moves focus into the thread when one is opened.
@@ -57,11 +62,13 @@ export function ConversationHeader({
         <BackIcon className="h-5 w-5" />
       </Link>
 
-      <UserAvatar
-        nickname={counterpart.nickname}
-        userId={counterpart.id}
-        className="h-10 w-10 text-[15px]"
-      />
+      <AvatarWithPresence online={presence.online} ringClassName="ring-background">
+        <UserAvatar
+          nickname={counterpart.nickname}
+          userId={counterpart.id}
+          className="h-10 w-10 text-[15px]"
+        />
+      </AvatarWithPresence>
 
       <div className="min-w-0 flex-1">
         <h2 className="truncate font-semibold">{counterpart.nickname}</h2>
@@ -71,20 +78,44 @@ export function ConversationHeader({
             several threads with the same seller has nothing else to tell them apart. */}
         {data.product ? <ProductBadge product={data.product} size="md" className="mt-1" /> : null}
         {/*
-          The design puts a presence line here — "Actif il y a 10 min". There is no presence in
-          this API and nothing that could stand in for one: the only timestamp available is when
-          the last message was sent, which is a different fact. Relabelling it would have the
-          interface assert that somebody was online when all it knows is that they wrote
-          something, so the wording stays what the data actually supports.
+          The presence line the design asked for, now that the API can support it.
+          
+          Three states, in descending order of how much they tell the reader: someone is typing,
+          someone is here, someone was last here at a given time. The fallback is still the last
+          message, and it is still labelled as what it is — a member Redis has never seen is not
+          the same as one known to be away, and "Dernier message" says only what the data supports
+          rather than inventing an absence.
+
+          `aria-live` sits on this one line rather than on the header, so a screen reader hears
+          "Farid ecrit..." without the nickname and the listing being read out again with it.
+          Polite, because it must never interrupt an incoming message being announced.
         */}
-        <p className="text-muted-foreground mt-0.5 truncate text-xs">
-          Dernier message{' '}
-          <time
-            dateTime={new Date(data.lastMessageTimestamp * 1000).toISOString()}
-            title={formatAbsolute(data.lastMessageTimestamp)}
-          >
-            {formatListStamp(data.lastMessageTimestamp)}
-          </time>
+        <p aria-live="polite" className="text-muted-foreground mt-0.5 truncate text-xs">
+          {typing ? (
+            <span className="text-primary font-medium">{counterpart.nickname} ecrit...</span>
+          ) : presence.online ? (
+            <span className="text-emerald-600 dark:text-emerald-500">En ligne</span>
+          ) : presence.lastSeenAt ? (
+            <>
+              Actif{' '}
+              <time
+                dateTime={new Date(presence.lastSeenAt * 1000).toISOString()}
+                title={formatAbsolute(presence.lastSeenAt)}
+              >
+                {formatLastSeen(presence.lastSeenAt)}
+              </time>
+            </>
+          ) : (
+            <>
+              Dernier message{' '}
+              <time
+                dateTime={new Date(data.lastMessageTimestamp * 1000).toISOString()}
+                title={formatAbsolute(data.lastMessageTimestamp)}
+              >
+                {formatListStamp(data.lastMessageTimestamp)}
+              </time>
+            </>
+          )}
         </p>
       </div>
     </header>
