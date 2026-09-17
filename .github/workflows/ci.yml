@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A second push to a branch cancels the run still going for the first. Without this a busy
+# afternoon queues five runs of a pipeline whose answer only matters for the newest commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything that needs neither a browser nor a backend, in one job. Splitting lint, format and
+  # types into three would triple the install time to parallelise work taking seconds.
+  static:
+    name: Lint, format, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      # The layering rule the README describes, enforced rather than documented. oxlint has no
+      # no-restricted-imports, so this walks the import graph itself.
+      - name: Dependency boundaries
+        run: npm run boundaries
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  unit:
+    name: Unit and component tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    # Last, and only if the cheap checks passed. An e2e run takes minutes and there is no sense
+    # spending them to discover a type error the static job found in seconds.
+    needs: [static, unit]
+
+    env:
+      # Shared with the API container below: this application verifies the session cookie's
+      # signature, so a mismatch makes every visitor look signed out.
+      AUTH_SECRET: e2e-secret-that-is-at-least-32-characters-long
+      API_URL: http://localhost:3005/api
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lbc
+          POSTGRES_PASSWORD: lbc
+          POSTGRES_DB: lbc_messaging
+        ports: ['5432:5432']
+        # Without a health check the job races the container and fails on connection refused
+        # roughly one run in five, which is the kind of flake that trains people to hit re-run.
+        options: >-
+          --health-cmd "pg_isready -U lbc -d lbc_messaging"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The API is a separate repository and a separate deployment. It is checked out and run here
+      # rather than mocked, because what this suite exists to prove is that the two halves agree —
+      # a stub would assert only that the stub behaves as written.
+      - name: Check out the API
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/leboncoin-api
+          path: .api
+          # Falls back to the default branch. Pin this to a tag once the API is released.
+          ref: main
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Start the API
+        working-directory: .api
+        env:
+          DATABASE_URL: postgresql://lbc:lbc@localhost:5432/lbc_messaging?schema=public
+          REDIS_URL: redis://localhost:6379
+          PORT: 3005
+          LOG_LEVEL: warn
+          # Raised well above anything a test does: the suite drives the composer far faster than a
+          # person would, and a 429 mid-scenario would be a flake rather than a finding.
+          SEND_RATE_LIMIT: 2000
+          GLOBAL_RATE_LIMIT: 20000
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec prisma migrate deploy
+          pnpm db:seed
+          pnpm build
+          node dist/main.js &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:3005/health/live >/dev/null && exit 0
+            sleep 2
+          done
+          echo "The API did not become healthy."
+          exit 1
+
+      - run: npm ci
+
+      # Only Chromium: all three Playwright projects are Chromium-based devices, and installing the
+      # other two engines would add minutes for browsers nothing targets.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        # The report is only interesting when something failed, and uploading it unconditionally is
+        # a few megabytes per green run for nobody.
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  # A single required status check, so branch protection does not have to name every job above —
+  # and so adding a job cannot silently become optional because nobody updated the setting.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [static, unit, build, e2e]
+    if: always()
+    steps:
+      - name: Fail if any job did not succeed
+        run: |
+          results='${{ join(needs.*.result, " ") }}'
+          if echo "$results" | grep -qv '^success\( success\)*$'; then
+            echo "One or more jobs failed or were cancelled: $results"
+            exit 1
+          fi
+          echo "All checks passed."

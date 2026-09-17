@@ -1,0 +1,14 @@
+node_modules
+.next
+coverage
+playwright-report
+test-results
+.e2e
+.git
+.github
+*.tsbuildinfo
+# Secrets must never reach a layer. An image is distributed, and a file deleted in a later layer
+# is still present in the one before it.
+.env
+.env.*
+!.env.example
