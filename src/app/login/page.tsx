@@ -27,7 +27,7 @@ export default async function LoginPage() {
       <div className="bg-card w-full max-w-sm rounded-3xl p-6 shadow-sm sm:p-8">
         <h1 className="text-2xl font-bold tracking-tight">Messagerie</h1>
         <p className="text-muted-foreground mt-1.5 text-sm">
-          Identifiez-vous pour acceder a vos conversations.
+          Un pseudo suffit. Connectez-vous, ou creez un compte si vous n&rsquo;en avez pas.
         </p>
 
         <LoginForm />
@@ -38,11 +38,17 @@ export default async function LoginPage() {
         to read the fixtures to get in. This block is the demo affordance, and it is kept in the
         markup rather than in the authentication path so that removing it removes the whole of
         the shortcut.
+
+        A new account is worth saying out loud too: it starts empty, and a reviewer who creates
+        one and finds no conversations should know that is the corpus and not a failure.
       */}
-      <p className="text-muted-foreground max-w-sm text-center text-xs">
-        Jeu de donnees de demonstration : essayez <strong>Thibaut</strong>, <strong>Elodie</strong>{' '}
-        ou <strong>Yasmine</strong>.
-      </p>
+      <div className="text-muted-foreground max-w-sm space-y-1 text-center text-xs">
+        <p>
+          Jeu de donnees de demonstration : essayez <strong>Thibaut</strong>,{' '}
+          <strong>Elodie</strong> ou <strong>Yasmine</strong>.
+        </p>
+        <p>Un compte cree avec un nouveau pseudo demarre sans conversation.</p>
+      </div>
     </main>
   )
 }

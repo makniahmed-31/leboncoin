@@ -3,7 +3,7 @@ import * as z from 'zod/mini'
 import { userSchema } from '@/lib/contracts'
 
 import { ApiError } from '@/lib/api-error'
-import { API_URL } from '@/lib/env'
+import { API_URL, COOKIE_SECURE } from '@/lib/env'
 import { readJson, route } from '@/lib/route-handler'
 import { SESSION_COOKIE } from '@/lib/session'
 
@@ -56,7 +56,7 @@ export const POST = route(async (request) => {
     // another site, so a shared link to a conversation would land on the login screen even
     // though the member is signed in. It still blocks the cross-site POST that matters.
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: COOKIE_SECURE,
     maxAge: session.data.expiresInSeconds,
     path: '/',
   })
