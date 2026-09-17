@@ -7,6 +7,7 @@ import { ConversationList } from '@/features/conversations/components/conversati
 import { queryKeys } from '@/lib/query-keys'
 import { getServerQueryClient } from '@/lib/server-query'
 import { getSession } from '@/lib/session'
+import { LiveGate } from '@/shared/live/live-gate'
 
 import { ConversationsShell } from './shell'
 
@@ -46,6 +47,10 @@ export default async function ConversationsLayout({ children }: { children: Reac
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
+      {/* Everything below this point is behind the redirect above, so the stream belongs open.
+          The root layout's own flag cannot be relied on: it is captured when that layout renders,
+          which for a member who just signed in was the login screen with no session. */}
+      <LiveGate />
       <ConversationsShell
         list={<ConversationList currentUserId={session.userId} nickname={session.nickname} />}
       >

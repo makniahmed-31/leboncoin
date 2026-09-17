@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ConnectionStatus, MessageTransport, TransportEvent } from '@/lib/transport'
 import { createTransport } from '@/lib/transport'
@@ -9,6 +9,8 @@ type LiveContextValue = {
   status: ConnectionStatus
   watch: (conversationId: number | null) => void
   subscribe: (listener: (event: TransportEvent) => void) => () => void
+  /** Opts a subtree into the stream and returns its release. See `useEnsureLive`. */
+  enable: () => () => void
 }
 
 const LiveContext = createContext<LiveContextValue | null>(null)
@@ -31,6 +33,27 @@ export function LiveProvider({
   const [status, setStatus] = useState<ConnectionStatus>(enabled ? 'connecting' : 'idle')
   const transportRef = useRef<MessageTransport | null>(null)
 
+  /*
+   * A second way in, because the prop alone was not enough — and the way it failed is worth
+   * recording, since nothing about it looked broken.
+   *
+   * `enabled` is computed in the root layout from the session cookie. Signing in navigates from
+   * /login to /conversations on the client, and Next preserves a shared layout across a client
+   * navigation: the root layout keeps the payload it rendered for /login, where there was no
+   * session yet. `router.refresh()` is meant to cure exactly that, but the `replace` issued
+   * immediately after it supersedes the refresh. So the prop stayed `false` for the whole
+   * session and no stream was ever opened — every live feature silently dead until the member
+   * happened to reload the page, which is precisely the thing nobody does while testing a
+   * single-page app.
+   *
+   * Letting the authenticated subtree assert it instead is what makes this robust: the
+   * conversations layout has already redirected anyone without a session, so being rendered
+   * inside it is a stronger statement about the session than a flag captured at whatever moment
+   * the root layout last ran.
+   */
+  const [subtreeCount, setSubtreeCount] = useState(0)
+  const active = enabled || subtreeCount > 0
+
   if (transportRef.current === null) {
     transportRef.current = createTransport()
   }
@@ -47,7 +70,7 @@ export function LiveProvider({
    * still wraps the whole tree, so `useLive` works everywhere; it simply does not connect.
    */
   useEffect(() => {
-    if (!enabled) return
+    if (!active) return
 
     const transport = transportRef.current
     if (!transport) return
@@ -61,15 +84,31 @@ export function LiveProvider({
       unsubscribe()
       transport.disconnect()
     }
-  }, [enabled])
+  }, [active])
+
+  /*
+   * Counted rather than a boolean, because it has to be given back.
+   *
+   * Signing out navigates to /login, which unmounts the conversations layout and the gate with
+   * it — but the provider lives in the root layout and stays mounted. A flag that is only ever
+   * set would leave the stream open on the login screen with the cookie gone, which is the
+   * unbounded run of 401s this gate exists to avoid in the first place. A count also lets more
+   * than one authenticated subtree ask at once without the first to unmount closing the stream
+   * out from under the others.
+   */
+  const enable = useCallback(() => {
+    setSubtreeCount((count) => count + 1)
+    return () => setSubtreeCount((count) => Math.max(0, count - 1))
+  }, [])
 
   const value = useMemo<LiveContextValue>(
     () => ({
       status,
       watch: (conversationId) => transportRef.current?.watch(conversationId),
       subscribe: (listener) => transportRef.current?.subscribe(listener) ?? (() => {}),
+      enable,
     }),
-    [status]
+    [status, enable]
   )
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>
@@ -115,4 +154,20 @@ export function useWatchConversation(conversationId: number | null) {
     watch(conversationId)
     return () => watch(null)
   }, [conversationId, watch])
+}
+
+/**
+ * Declares that this part of the tree is behind authentication, so the stream should be open.
+ *
+ * Idempotent and safe to call from several places at once — it sets a flag that is already set.
+ * It is deliberately not called from the login screen or from anything above it: `/api/events`
+ * answers 401 without a session and `EventSource` treats that as fatal, so a stream opened there
+ * would be an unbounded run of 401s behind the form.
+ */
+export function useEnsureLive() {
+  const { enable } = useLive()
+
+  // The effect's cleanup is the release, so the stream closes when the last authenticated
+  // subtree goes away — on sign-out, that is the gate unmounting as /login takes over.
+  useEffect(() => enable(), [enable])
 }
